@@ -13,9 +13,36 @@ import (
 	"sync"
 )
 
+type includeFlags []string
+
+func (i *includeFlags) String() string {
+	return "includeFlags"
+}
+
+func (i *includeFlags) Set(value string) error {
+	*i = append(*i, value)
+	return nil
+}
+
+var includes includeFlags
+
+type excludeFlags []string
+
+func (i *excludeFlags) String() string {
+	return "excludeFlags"
+}
+
+func (i *excludeFlags) Set(value string) error {
+	*i = append(*i, value)
+	return nil
+}
+
+var excludes excludeFlags
+
 var (
-	only    = flag.String("f", "", "file path(optional)")
-	exclude = flag.String("ex", "", "regexp to exclude file name(optional)")
+	only = flag.String("f", "", "file path(optional)")
+	// include = flag.SliceString("ex", "", "regexp to exclude file name(optional)")
+	// exclude = flag.String("ex", "", "regexp to exclude file name(optional)")
 )
 
 type TotalStat struct {
@@ -30,17 +57,27 @@ type FileStat struct {
 }
 
 func main() {
+	flag.Var(&includes, "in", "regexp to include file name(optional)")
+	flag.Var(&excludes, "ex", "regexp to exclude file name(optional)")
 	flag.Parse()
 
 	fs := make([]string, 0)
 	if *only != "" {
 		fs = []string{*only}
 	} else {
-		var re *regexp.Regexp
-		if *exclude != "" {
-			re = regexp.MustCompile(*exclude)
+		inre := make([]*regexp.Regexp, 0)
+		exre := make([]*regexp.Regexp, 0)
+		if len(excludes) > 0 {
+			for _, v := range excludes {
+				exre = append(exre, regexp.MustCompile(v))
+			}
 		}
-		fs = flattenDir("./", re)
+		if len(includes) > 0 {
+			for _, v := range includes {
+				inre = append(inre, regexp.MustCompile(v))
+			}
+		}
+		fs = flattenDir("./", exre, inre)
 	}
 
 	var lock sync.Mutex
@@ -148,7 +185,7 @@ func statFile(path string) (FileStat, error) {
 	return fs, nil
 }
 
-func flattenDir(dir string, exre *regexp.Regexp) []string {
+func flattenDir(dir string, exre []*regexp.Regexp, inre []*regexp.Regexp) []string {
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
 		panic(err)
@@ -156,14 +193,29 @@ func flattenDir(dir string, exre *regexp.Regexp) []string {
 
 	var paths []string
 	for _, file := range files {
-		if exre != nil && exre.MatchString(file.Name()) {
-			continue
-		}
 		if strings.HasPrefix(file.Name(), ".") {
 			continue
 		}
+		isEx := false
+		for _, re := range exre {
+			if re.MatchString(file.Name()) {
+				isEx = true
+				break
+			}
+		}
+		if isEx {
+			continue
+		}
 		if file.IsDir() {
-			paths = append(paths, flattenDir(filepath.Join(dir, file.Name()), exre)...)
+			paths = append(paths, flattenDir(filepath.Join(dir, file.Name()), exre, inre)...)
+			continue
+		}
+		if len(inre) > 0 {
+			for _, re := range inre {
+				if re.MatchString(file.Name()) {
+					paths = append(paths, filepath.Join(dir, file.Name()))
+				}
+			}
 			continue
 		}
 		paths = append(paths, filepath.Join(dir, file.Name()))

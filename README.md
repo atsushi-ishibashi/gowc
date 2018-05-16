@@ -67,6 +67,20 @@ Each files
 -------------
 | 29 | 1493 |
 -------------
+// include and exclude
+gowc -ex .*.md -ex ^LICENSE$ -in .*.go
+TotalStats
+-------------------------
+| Files | Lines | Bytes |
+-------------------------
+| 1     | 225   | 4623  |
+-------------------------
+Each files
+--------------
+| main.go    |
+--------------
+| 225 | 4623 |
+--------------
 ```
 
 ### Help
@@ -78,4 +92,6 @@ Usage of gowc:
     	regexp to exclude file name(optional)
   -f string
     	file path(optional)
+  -in value
+    	regexp to include file name(optional)
 ```
